@@ -1,7 +1,7 @@
 #include <base.hpp>
 #include <vector>
 
-#include "policy.hpp"
+#include "include/sepolicy.hpp"
 
 using namespace std;
 
@@ -23,6 +23,7 @@ Options:
    --apply FILE      apply rules from FILE, read and parsed
                      line by line as policy statements
                      (multiple --apply are allowed)
+   --print-rules     print all rules in the loaded sepolicy
 
 If neither --load, --load-split, nor --compile-split is specified,
 it will load from current live policies (/sys/fs/selinux/policy)
@@ -35,9 +36,10 @@ int main(int argc, char *argv[]) {
     cmdline_logging();
     const char *out_file = nullptr;
     vector<string_view> rule_files;
-    sepolicy *sepol = nullptr;
+    std::unique_ptr<sepolicy> sepol;
     bool magisk = false;
     bool live = false;
+    bool print = false;
 
     if (argc < 2) usage(argv[0]);
     int i = 1;
@@ -49,6 +51,8 @@ int main(int argc, char *argv[]) {
                 live = true;
             else if (option == "magisk"sv)
                 magisk = true;
+            else if (option == "print-rules"sv)
+                print = true;
             else if (option == "load"sv) {
                 if (argv[i + 1] == nullptr)
                     usage(argv[0]);
@@ -81,7 +85,8 @@ int main(int argc, char *argv[]) {
                 rule_files.emplace_back(argv[i + 1]);
                 ++i;
             } else if (option == "help"sv) {
-                statement_help();
+                sepolicy::print_statement_help();
+                exit(0);
             } else {
                 usage(argv[0]);
             }
@@ -94,6 +99,11 @@ int main(int argc, char *argv[]) {
     if (sepol == nullptr && !(sepol = sepolicy::from_file(SELINUX_POLICY))) {
         fprintf(stderr, "Cannot load policy from " SELINUX_POLICY "\n");
         return 1;
+    }
+
+    if (print) {
+        sepol->print_rules();
+        return 0;
     }
 
     if (magisk)
@@ -116,6 +126,5 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    delete sepol;
     return 0;
 }
